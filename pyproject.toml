@@ -1,0 +1,18 @@
+[project]
+name = "enterprise-llm-agent-platform"
+version = "0.1.0"
+description = "Enterprise internal LLM agent platform"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

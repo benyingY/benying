@@ -1,3 +1,0 @@
-module MODULE_PLACEHOLDER
-
-go 1.22
