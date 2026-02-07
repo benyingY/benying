@@ -1,43 +1,77 @@
-step 1: 项目骨架与服务模板（7 个服务 + 共享库；基础配置与启动脚手架）
-step 2: 本地编排与健康检查（docker-compose 或等价方案；各服务 /health 返回 200）
+# V1 实施计划（细颗粒度、可单测）
 
-step 3: 接入与多租户服务—路由与上下文（/invoke 真实入口；request-id 贯穿；请求/响应结构化）
-step 4: 接入与多租户服务—认证与租户解析（真实 JWT/OIDC 校验；tenant-id 从 token/映射表解析）
-step 5: 接入与多租户服务—配额与限流（Redis 计数；按 tenant/user 维度限流；可配置策略）
+## 1. 目标与范围
 
-step 6: Agent 编排与运行时服务—核心模型落地（任务/会话/执行上下文落库；生命周期 API）
-step 7: Agent 编排与运行时服务—配置加载（从 DB/配置仓读取 JSON/YAML；schema 校验）
-step 8: Agent 编排与运行时服务—Prompt 渲染（模板引擎 + 变量注入；版本化与回放）
-step 9: Agent 编排与运行时服务—流水线执行（真实执行链路；结果结构化与持久化）
+V1 交付范围：`web-portal + platform-api + agent-core + knowledge-service + tool-executor`。
 
-step 10: 模型接入与路由服务—统一协议（请求/响应协议落地；模型元数据注册）
-step 11: 模型接入与路由服务—Provider 适配（至少接入 1 个真实模型；记录耗时/Token）
-step 12: 模型接入与路由服务—路由与降级策略（真实策略引擎；失败自动回退）
+实施原则：
 
-step 13: 工具与系统集成服务—工具注册与发现（DB 管理工具元数据；OpenAPI/Schema）
-step 14: 工具与系统集成服务—调用执行（真实 HTTP/SDK 调用；超时/重试/熔断）
-step 15: 工具与系统集成服务—权限挂钩（tenant/user 维度鉴权；最小权限）
+1. 每个步骤都可以独立测试并给出通过/失败结论。
+2. 先打通最短业务闭环，再增加治理与优化能力。
+3. 先模块内稳定，再做跨服务联调。
 
-step 16: 知识与记忆服务—数据接入与索引（文档接入/解析/切分；向量入库）
-step 17: 知识与记忆服务—检索（真实向量检索；排序与过滤策略）
-step 18: 知识与记忆服务—短期记忆（Redis/DB 读写；一致性可验证）
+## 2. 里程碑
 
-step 19: 治理与安全服务—策略引擎落地（真实策略配置与评估 API）
-step 20: 治理与安全服务—内容安全与脱敏（规则/模型检测；敏感信息替换）
-step 21: 治理与安全服务—审计日志（关键事件入库；可检索与追溯）
+- M1：单轮会话闭环（无审批、无工具）
+- M2：审批闭环（Temporal Signals）
+- M3：RAG 闭环（ACL 预过滤 + 引用）
+- M4：工具调用闭环（Trusted/Untrusted）
+- M5：稳定性门禁通过（压测、回放、审计）
 
-step 22: 可观测与运营服务—日志/指标/链路（OpenTelemetry + Prometheus 贯通）
-step 23: 可观测与运营服务—链路追踪（跨服务 request-id/trace-id 贯通）
-step 24: 可观测与运营服务—成本/用量统计（按 tenant/user 聚合）
+## 3. 跨服务开发步骤
 
-step 25: 结果规范化（输出 schema 校验 + 兼容层）
-step 26: 错误与降级（模型/工具失败的兜底返回与告警）
+| Step | 服务 | 目标 | 前置依赖 | 独立测试 | 通过标准 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | platform-api | 服务骨架 + 健康检查 | 无 | `go test ./... -run TestHealth` | API 健康检查通过 |
+| 2 | agent-core | Temporal worker 基础框架 | 无 | `pytest tests/workflows/test_worker_bootstrap.py` | worker 可启动并注册 |
+| 3 | web-portal | 路由骨架与登录页壳 | 无 | `pnpm --filter web-portal test route-smoke` | 核心页面可访问 |
+| 4 | platform-api | 鉴权中间件 | Step 1 | `go test ./internal/auth -run TestJWT` | token 校验与租户注入正确 |
+| 5 | platform-api | 会话创建/消息写入 API | Step 4 | `go test ./internal/session -run TestSessionCRUD` | 会话与消息持久化正确 |
+| 6 | agent-core | ChatWorkflow 骨架 | Step 2 | `pytest tests/workflows/test_chat_workflow.py::test_happy_path` | 基础流程可跑通 |
+| 7 | agent-core | gRPC 接口（CreateRun/StreamRunEvents/GetRun） | Step 6 | `pytest tests/runtime/test_grpc_contract.py tests/runtime/test_event_stream.py` | gRPC 协议字段一致且事件流顺序稳定 |
+| 8 | platform-api | 对接 agent-core（非流式） | Step 5,7 | `go test ./tests/integration -run TestCreateRun` | API 可成功触发 run |
+| 9 | web-portal | 聊天页发送与结果展示 | Step 3,8 | `pnpm --filter web-portal test chat-send` | UI 单轮会话可完成 |
+| 10 | agent-core | LangGraph Activity 接入 | Step 6 | `pytest tests/activities/test_run_graph_activity.py` | Activity 产出结构化结果 |
+| 11 | platform-api | SSE 流式桥接 | Step 8,10 | `go test ./internal/stream -run TestSSEBridge` | 流事件顺序正确 |
+| 12 | web-portal | SSE 增量渲染 | Step 9,11 | `pnpm --filter web-portal test sse-stream` | 流式输出无乱序 |
+| 13 | agent-core | 审批等待与 Signal 恢复 | Step 10 | `pytest tests/workflows/test_approval_signal.py` | approve/reject 分支正确 |
+| 14 | platform-api | 审批 API（approve/reject） | Step 13 | `go test ./internal/approval -run TestSignal` | 审批动作成功触发 workflow |
+| 15 | web-portal | 审批中心页面 | Step 14 | `pnpm --filter web-portal test approval` | 审批列表与动作可用 |
+| 16 | knowledge-service | 入库任务 API + 数据模型 | 无 | `pytest tests/api/test_ingest_job_api.py` | 任务状态机可用 |
+| 17 | knowledge-service | 检索 API（Hybrid） | Step 16 | `pytest tests/search/test_hybrid_search.py` | 混合检索结果可返回 |
+| 18 | knowledge-service | ACL 预过滤 | Step 17 | `pytest tests/search/test_acl_prefilter.py` | 非授权数据零泄漏 |
+| 19 | platform-api | 知识 API 代理（ingest/query/reindex） | Step 16,17,18 | `go test ./internal/knowledge -run TestKnowledgeProxy` | 状态码与错误码透传一致 |
+| 20 | agent-core | 检索节点接入 knowledge-service | Step 10,18 | `pytest tests/graph/test_retriever_node.py` | 检索节点返回引用 |
+| 21 | tool-executor | gRPC 骨架 + Schema 校验 | 无 | `go test ./internal/validator -run TestSchemaValidation` | 入/出参校验可用 |
+| 22 | tool-executor | Trusted 执行路径 | Step 21 | `go test ./internal/executor/trusted -run TestExecute` | trusted 工具执行正确 |
+| 23 | tool-executor | Untrusted 沙箱路径 | Step 21 | `go test ./internal/executor/sandbox -run TestSandboxTimeout` | 超时中断和回收正确 |
+| 24 | agent-core | 工具节点接入 tool-executor | Step 22,23 | `pytest tests/graph/test_tool_node.py` | 工具节点成功与失败路径都可控 |
+| 25 | platform-api | 审计日志全链路 | Step 14,20,24 | `go test ./internal/audit -run TestAuditLog` | 写操作均可审计 |
+| 26 | 全链路 | E2E 主流程 | Step 12,15,20,24,25 | `make test-e2e-mainflow` | 聊天->审批->检索->工具 全链路通过 |
 
-step 27: 真实模型接入覆盖（至少 2 个 Provider；路由可切换）
-step 28: 向量库写入打通（批量写入 + 增量更新）
-step 29: 向量检索打通（多租户过滤 + 质量指标）
-step 30: 检索权限过滤（跨租户不可见；审计可追踪）
-step 31: 长期记忆持久化（重启后可读；回放可验证）
-step 32: 真实工具接入（至少 2 个工具；读写可验证）
-step 33: 工具权限校验（租户/用户维度拦截；策略可配置）
-step 34: 多租户隔离贯穿（数据/模型/工具/计费全链路可区分）
+## 4. 集成测试门禁
+
+- Gate A（M1）：Step 1-12 全部通过。
+- Gate B（M2）：Step 13-15 全部通过。
+- Gate C（M3）：Step 16-20 全部通过。
+- Gate D（M4）：Step 21-24 全部通过。
+- Gate E（M5）：Step 25-26 通过，且关键链路 p95、错误率、审计覆盖率达标。
+
+## 5. 稳定性验收指标（V1）
+
+- API 可用性 >= 99.9%
+- 会话主链路 p95 <= 2.5s（不含模型首 token 等待）
+- 工具调用失败自动重试成功率 >= 95%
+- ACL 误放行率 = 0
+- 审批动作可追溯率 = 100%
+
+## 6. 风险与缓解
+
+- 风险：跨服务联调晚，导致集中爆雷。
+- 缓解：严格按 Step 独立测试先过，再进入 Gate。
+
+- 风险：knowledge-service 入库任务挤压在线查询。
+- 缓解：独立队列与 worker 池，设置资源配额和隔离。
+
+- 风险：Temporal Workflow 非确定性错误。
+- 缓解：所有外部 I/O 下沉 Activity，固定 replay 回归测试。

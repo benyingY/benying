@@ -1,66 +1,122 @@
-# 各层详细技术选型 (Technical Stack)
+# 企业级 Agent 平台技术栈（定版 v1.1）
 
-我们以 Python 和 Go 为主（AI 生态主要在 Python，基础设施与性能敏感服务以 Go 承载），构建一套企业级、可私有化部署的方案。
-全局约束：所有组件必须可私有化部署（可自托管），不依赖外部托管的关键能力。
+本文档给出平台建设的最终技术栈清单。所有模块只列当前确定采用的技术，不再列候选或替代方案。
 
-## 1. 接入与多租户层 (Access & Multitenancy)
-目标：统一入口、鉴权、租户识别与流量治理。
-- API Gateway：APISIX 或 Kong（外部入口）
-  - 负责流量分发、API Key 校验、基础限流与租户识别。
-- PoC 过渡方案：先用 Go Gin 实现轻量接入服务/网关能力，验证路由、上下文与链路追踪；后续再切换到 APISIX。
-- 认证与租户：JWT Token（tenant-id/role 从 token claims 解析；必要时映射表辅助）
-- 限流与配额：Redis + 令牌桶/滑动窗口（按 tenant/user 维度限流；策略可配置）
+## 1. 技术栈总览
 
-## 2. 模型接入与抽象层 (Model Gateway)
-目标：统一管理 LLM，解耦上层应用与底层模型。
-- 开源/标准组件：LiteLLM（强烈推荐）
-  - Python 库（也有 Proxy 模式），统一 100+ 模型为 OpenAI API 兼容接口。
-- 私有化推理服务：vLLM 或 Xinference
-  - 自建 Llama / Qwen 等模型时使用，vLLM 在推理速度与显存利用率上优势明显。
-- 真实模型 Provider：支持多厂商可插拔（由 LiteLLM 统一适配与路由）
+- 运行平台：Kubernetes 1.29+、Helm、Argo CD
+- 主要语言：TypeScript 5.x、Python 3.11+、Go 1.22+
+- 核心存储：PostgreSQL 16+、Redis 7+、S3 兼容对象存储
+- 跨服务事件系统：Kafka 3.6+
+- 可观测：OpenTelemetry、Prometheus、Grafana、Tempo、Loki
+- 安全体系：Keycloak、OPA(Rego)、Vault、KMS
 
-## 3. 编排与推理引擎 (Orchestration)
-目标：处理对话逻辑、状态流转与任务编排。
-- 核心框架：LangGraph（LangChain 生态）
-  - 图 + 状态机，适合循环、分支与多步推理场景。
-- Web 框架：FastAPI（核心编排与 API 服务）
-  - 异步能力强，适合 LLM 调用与流式响应。
-- 多 Agent 框架（可选）：Microsoft AutoGen 或 CrewAI
-  - 若强调“多角色协作”，可集成。
+## 2. 分层技术栈
 
-## 4. 记忆与知识库 (RAG & Memory)
-目标：存向量、存历史、解析文档。
-- 向量数据库：Qdrant（首选）或 Milvus
-  - Qdrant 部署轻量、性能高；Milvus 适合超大规模向量场景。
-- ETL/文档解析：Unstructured.io 或 LlamaParse
-  - 解析 PDF / PPT / Excel 等非结构化文档。
-- 缓存/会话存储：Redis
-  - 短期记忆与流式响应状态存储。
-- 多租户数据与配置存储：Postgres
+### 2.1 入口与产品层
 
-## 5. 工具与行动层 (Tools & Sandbox)
-目标：安全地执行代码和调用 API。
-- 代码沙箱：Docker 容器 + gVisor（或 Firecracker）
-  - 必须隔离运行 Agent 生成的代码，支持用完即焚，满足私有化部署。
-- API 定义：OpenAPI (Swagger)
-  - 工具接口标准化，无需额外选型。
+| 能力 | 采用技术栈 |
+| --- | --- |
+| Web 门户与 Agent Store | Next.js + TypeScript + Ant Design |
+| API 网关 | Kong |
+| IM/Bot 接入 | 自研 Adapter + 飞书/Slack 官方 SDK |
+| 身份认证与单点登录 | Keycloak（OIDC/SAML） |
 
-## 6. 开发与调试环境 (IDE / Playground)
-目标：提供可视化编排与调试界面。
-- 前端框架：Next.js (React) + TypeScript
-- 流程图编排 UI：React Flow（拖拽式工作流画布）
-- UI 组件库：ShadcnUI + TailwindCSS
+### 2.2 Agent 构建层（Control Plane）
 
-## 7. 运行时与基础设施 (Runtime)
-目标：支持异步执行、可观测、可治理。
-- 任务队列：Celery + RabbitMQ
-  - 处理长耗时 Agent 任务。
-- 基础设施与高性能服务：Go（网关扩展、计费、审计、调度等）
-- 可观测与调试：Langfuse（强烈推荐）
-  - 记录调用耗时、Token 消耗与输入输出（可脱敏）。
-- 链路追踪与指标：OpenTelemetry + Prometheus + Grafana
-- 审计日志存储与检索：Elasticsearch
-- 安全护栏：NVIDIA NeMo Guardrails 或 Guardrails AI
-  - 输入输出合规拦截。
-- 容器与编排：Docker + Kubernetes
-- 配置与密钥：Vault / 云 KMS
+| 能力 | 采用技术栈 |
+| --- | --- |
+| Agent 配置与版本管理 | PostgreSQL + GitOps（配置即代码） |
+| Agent 图编排 | LangGraph |
+| 工作流持久化与容错 | Temporal SDK（TypeScript/Python）+ Temporal Server |
+| Prompt/Policy 管理 | Git 仓库 + PR 审批流 |
+| Studio 调试能力 | Trace 回放 + 沙箱执行环境 |
+
+### 2.3 Agent 运行时（Data Plane）
+
+| 能力 | 采用技术栈 |
+| --- | --- |
+| 编排执行引擎 | Temporal Server |
+| Agent 执行粒度 | Temporal Workflow（粗粒度）+ LangGraph Activity（细粒度） |
+| 异步任务总线 | Kafka |
+| 会话状态管理 | Redis + PostgreSQL |
+| 工具执行器 | Go 服务 + gVisor/Kata 容器隔离 + Kubernetes NetworkPolicy |
+| 人工审批节点 | Temporal Signals/Queries + 审批 API + PostgreSQL |
+| Tool 调用协议 | gRPC + OpenAPI 3.1 JSON Schema |
+| 执行隔离策略 | Trusted Tools 进程内执行；Untrusted Tools 强制进入 gVisor/Kata |
+
+### 2.4 能力层（模型/知识/工具）
+
+| 能力 | 采用技术栈 |
+| --- | --- |
+| Model Gateway | LiteLLM + 自研路由策略服务 |
+| 提示缓存 | Redis |
+| 向量检索 | PostgreSQL + pgvector |
+| 关键词检索 | OpenSearch |
+| 知识入库任务调度 | Celery + Redis |
+| RAG 权限过滤 | ACL Metadata 预过滤（Pre-Filtering）+ 召回参数调优（ef_search） |
+| 文档处理与切分 | Unstructured + 自研清洗管道 |
+| 重排模型（Rerank） | bge-reranker |
+| 工具注册中心 | PostgreSQL + OpenAPI/JSON Schema |
+
+### 2.5 治理与安全层
+
+| 能力 | 采用技术栈 |
+| --- | --- |
+| 权限模型 | RBAC + ABAC（OPA/Rego） |
+| 密钥管理 | Vault + 云 KMS |
+| 数据脱敏与 DLP | 自研策略服务 + DLP 规则引擎 |
+| 内容安全防护 | Prompt Injection 检测服务 + 输出审查策略 |
+| 审计留痕 | PostgreSQL 审计库 + 对象存储归档（WORM 策略） |
+
+### 2.6 可观测与 SRE
+
+| 能力 | 采用技术栈 |
+| --- | --- |
+| 分布式追踪 | OpenTelemetry + Tempo |
+| 指标监控 | Prometheus + Grafana |
+| 日志系统 | Loki |
+| 告警与值班联动 | Alertmanager + On-call 平台 |
+| 成本归因 | OpenCost + 应用层计费服务（Token、检索、工具调用、向量检索 CPU 分摊） |
+
+## 3. 数据分层
+
+- 事务数据：PostgreSQL（配置、权限、审批、审计索引）
+- 高速状态：Redis（会话上下文、限流计数、幂等记录）
+- 检索数据：PostgreSQL + pgvector（向量）+ OpenSearch（关键词）
+- 向量分区策略：pgvector 按租户/业务线分区，避免单表过大导致检索退化
+- 权限索引策略：Embedding 入库同步 ACL Metadata（用户组/部门/租户），检索时先做权限过滤再向量召回
+- 大文件与产物：S3（文档原件、日志归档、评测样本）
+
+## 4. CI/CD 与工程规范
+
+- 代码托管：GitHub
+- 持续集成：GitHub Actions（单测、静态扫描、镜像构建）
+- 持续交付：Argo CD（分环境发布、回滚）
+- 镜像仓库：Harbor
+- 安全扫描：Trivy
+
+## 5. 版本基线
+
+- Kubernetes 1.29+
+- PostgreSQL 16+
+- Redis 7+
+- Kafka 3.6+
+- OpenSearch 2.x
+- Python 3.11+
+- Node.js 20 LTS
+- Go 1.22+
+- TypeScript 5.x
+
+## 6. 关键架构约束
+
+1. Temporal 与 LangGraph 分工：Temporal 仅编排业务级长流程（如接单、审批、写回系统），不管理 LangGraph 节点跳转细节；LangGraph 仅负责单次 Agent 推理图执行，作为 Temporal Activity 运行。
+2. 状态边界：LangGraph 中间状态仅在单次 Activity 生命周期内维护，不与 Temporal 双写；Activity 结束后仅输出结构化结果与证据，由 Temporal 继续后续流程。
+3. 审批机制：统一通过 Temporal Signals/Queries 实现人工介入，避免引入第二套 BPM 引擎。
+4. Python 与 Go 协议：Python Agent 通过 gRPC 调用 Go Tool Executor，参数与返回统一遵循 OpenAPI 3.1 Schema。
+
+## 7. 评测与上线门禁
+
+- 评测基线：每个业务 Agent 上线前必须建设 20-50 条 Golden Dataset（标准问答与期望动作）。
+- 离线评测：每次发布前执行成功率、引用正确性、工具调用正确性评测。
+- 上线门禁：离线评测未达阈值禁止发布到生产环境。

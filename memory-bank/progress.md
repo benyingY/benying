@@ -1,17 +1,37 @@
-这个文档记录
+# 项目进展（周报模板）
 
-1. 今天做了什么
-2. 今天学到了什么 / 改变了什么想法
-## 进展记录
-2026-01-31: 初始化项目文档（README、架构、技术选型、计划）。
-2026-01-31: 完成 Step 1 骨架（Python FastAPI + Go Gin），并通过测试（pytest / go test ./...）。
-2026-01-31: 完成 Step 2 本地编排与健康检查（docker-compose + /health）。
-2026-01-31: 运行测试，pytest 通过；go test ./... 通过（因 Go build cache 权限，使用提升权限运行）。
-2026-01-31: 尝试 docker compose up -d：Docker Hub TLS handshake timeout；切换阿里源后 pull denied，未完成 Docker 启动测试。
-2026-01-31: 完成 Step 3 接入服务路由与上下文（/invoke 固定响应；request-id 贯穿），新增 Go 测试并通过 go test ./...（提升权限运行）；python3 -m pytest 通过。
-2026-01-31: 更新实现计划为真实功能落地版本；技术选型补充 JWT、Redis 限流、OpenTelemetry/Prometheus/Grafana、Postgres、Elasticsearch 与多模型 Provider 支持。
-2026-01-31: Step 3 接入层 /invoke 结构化请求/响应落地（校验 input、错误结构化、request-id 贯穿），补充 Go 测试并通过 go test ./...；python3 -m pytest 通过。
-2026-01-31: 优化 access 性能：Gin 默认 Release 模式、request-id 生成改为轻量原子计数、/invoke JSON 解析改为直接 Decoder；go test ./... 与 python3 -m pytest 通过。
-2026-01-31: access /invoke 支持 SSE（Accept: text/event-stream 或 stream=true），新增 SSE 测试并通过 go test ./... 与 python3 -m pytest。
-2026-01-31: access /invoke SSE 改为 OpenAI 风格（data: chat.completion.chunk + [DONE]），更新测试并通过 go test ./... 与 python3 -m pytest。
-2026-01-31: Step 4 接入层 JWT 鉴权（静态公钥、RS256 校验、可选 issuer/audience 校验），tenant 解析预留空函数；新增鉴权测试并通过 go test ./... 与 python3 -m pytest。
+## 1. 文档元数据
+
+- 最近更新时间：YYYY-MM-DD
+- 负责人：待填写
+- 当前阶段：M1/M2/M3/M4/M5（待填写）
+
+## 2. 里程碑状态
+
+| 里程碑 | 目标 | 当前状态 | 进度 | 备注 |
+| --- | --- | --- | --- | --- |
+| M1 | 单轮会话闭环（无审批、无工具） | 未开始/进行中/已完成 | 0% | 待填写 |
+| M2 | 审批闭环（Temporal Signals） | 未开始/进行中/已完成 | 0% | 待填写 |
+| M3 | RAG 闭环（ACL 预过滤 + 引用） | 未开始/进行中/已完成 | 0% | 待填写 |
+| M4 | 工具调用闭环（Trusted/Untrusted） | 未开始/进行中/已完成 | 0% | 待填写 |
+| M5 | 稳定性门禁通过（压测、回放、审计） | 未开始/进行中/已完成 | 0% | 待填写 |
+
+## 3. 本周完成
+
+- 待填写
+
+## 4. 下周计划
+
+- 待填写
+
+## 5. 风险与阻塞
+
+| 类型 | 描述 | 影响范围 | 负责人 | 缓解动作 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 风险/阻塞 | 待填写 | 待填写 | 待填写 | 待填写 | 打开/已缓解/已关闭 |
+
+## 6. 关键决策与变更记录
+
+| 日期 | 变更内容 | 影响文档/模块 | 决策人 |
+| --- | --- | --- | --- |
+| YYYY-MM-DD | 待填写 | 待填写 | 待填写 |
